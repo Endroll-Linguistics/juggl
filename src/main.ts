@@ -61,6 +61,7 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
     watcher: FSWatcher;
     ribbonIcon: HTMLElement;
     eventHandlers: IJugglEvents[] = [];
+    isUnloading: boolean = false;
 
     async onload(): Promise<void> {
       super.onload();
@@ -304,12 +305,50 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
     }
 
     async onunload() {
-      super.onunload();
-      console.log('Unloading Juggl');
-      this.app.workspace.detachLeavesOfType(JUGGL_NODES_VIEW_TYPE);
-      this.app.workspace.detachLeavesOfType(JUGGL_STYLE_VIEW_TYPE);
-      if (this.watcher) {
-        this.watcher.close();
+      // 标记插件正在卸载，防止新操作启动
+      this.isUnloading = true;
+      
+      try {
+        console.log("正在卸载Juggl插件...");
+        
+        // 确保所有Juggl视图都被分离和关闭
+        const jugglLeaves = this.app.workspace.getLeavesOfType(JUGGL_VIEW_TYPE);
+        for (const leaf of jugglLeaves) {
+          try {
+            if (leaf.view && leaf.view instanceof JugglView) {
+              // 确保视图的onClose方法被调用
+              await leaf.view.onClose();
+            }
+          } catch (error) {
+            console.error("关闭Juggl视图失败:", error);
+          }
+        }
+        
+        // 分离所有相关类型的叶子
+        this.app.workspace.detachLeavesOfType(JUGGL_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(JUGGL_NODES_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(JUGGL_STYLE_VIEW_TYPE);
+        
+        // 关闭文件监视器
+        if (this.watcher) {
+          try {
+            this.watcher.close();
+          } catch (error) {
+            console.error("关闭文件监视器失败:", error);
+          }
+          this.watcher = undefined;
+        }
+        
+        // 清理其他资源
+        this.eventHandlers = [];
+        this.coreStores = {};
+        this.stores = [];
+        
+        super.onunload();
+        console.log("Juggl插件卸载成功完成");
+      } catch (error) {
+        console.error("Juggl插件卸载过程中发生严重错误:", error);
+        super.onunload(); // 确保基类卸载方法被调用
       }
     }
 

@@ -265,20 +265,54 @@ export class WorkspaceMode extends Component implements IAGMode {
   }
 
   onunload(): void {
+    // 清理事件监听器
     for (const listener of this.events) {
-      if (listener.selector) {
-        this.viz.off(listener.eventName, listener.selector, listener.event);
-      } else {
-        this.viz.off(listener.eventName, listener.event);
+      try {
+        if (listener.selector) {
+          this.viz.off(listener.eventName, listener.selector, listener.event);
+        } else {
+          this.viz.off(listener.eventName, listener.event);
+        }
+      } catch (e) {
+        console.error("事件监听器移除失败", e);
       }
     }
     this.events = [];
-    activeDocument.off('keydown', '.cy-content', this.windowEvent, true);
-    if (this.toolbar) {
-      this.toolbar.$destroy();
+    
+    // 清理窗口事件监听器
+    if (this.windowEvent) {
+      try {
+        // 使用更安全的方式解绑事件
+        const doc = window.document;
+        if (doc && doc.removeEventListener) {
+          doc.removeEventListener('keydown', this.windowEvent);
+        }
+        this.windowEvent = null;
+      } catch (e) {
+        console.error("窗口事件监听器移除失败", e);
+      }
     }
+    
+    // 销毁toolbar组件
+    if (this.toolbar && typeof this.toolbar.$destroy === 'function') {
+      try {
+        this.toolbar.$destroy();
+        this.toolbar = undefined;
+      } catch (e) {
+        console.error("Toolbar组件销毁失败", e);
+      }
+    }
+
+    // 清理菜单
     if (this.menu) {
-      this.menu.destroy();
+      try {
+        if (typeof this.menu.destroy === 'function') {
+          this.menu.destroy();
+        }
+        this.menu = null;
+      } catch (e) {
+        console.error("菜单组件销毁失败", e);
+      }
     }
   }
 

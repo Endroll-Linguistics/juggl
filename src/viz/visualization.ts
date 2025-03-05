@@ -445,7 +445,111 @@ export class Juggl extends Component implements IJuggl {
     }
 
     onunload(): void {
-      this.plugin.eventHandlers.map(handler => handler.onJugglDestroyed(this));
+      // 通知事件处理器
+      if (this.plugin && this.plugin.eventHandlers) {
+        this.plugin.eventHandlers.forEach(handler => {
+          try {
+            handler.onJugglDestroyed(this);
+          } catch (e) {
+            console.error("事件处理器通知失败", e);
+          }
+        });
+      }
+      
+      // 清理Cytoscape实例
+      if (this.viz) {
+        try {
+          // 移除所有事件监听器
+          this.viz.removeAllListeners();
+          
+          // 安全访问和销毁扩展实例
+          const scratch = this.viz.scratch ? this.viz.scratch() : {};
+          
+          // 导航器扩展清理
+          if (scratch && scratch._navigatorInstance) {
+            try {
+              scratch._navigatorInstance.destroy();
+            } catch (e) {
+              console.error("导航器销毁失败", e);
+            }
+          }
+          
+          // 右键菜单扩展清理
+          if (scratch && scratch._cxtmenuInstance) {
+            try {
+              scratch._cxtmenuInstance.destroy();
+            } catch (e) {
+              console.error("右键菜单销毁失败", e);
+            }
+          }
+          
+          // 销毁主Cytoscape实例
+          this.viz.destroy();
+        } catch (e) {
+          console.error("Cytoscape实例销毁失败", e);
+        } finally {
+          this.viz = null;
+        }
+      }
+      
+      // 清理悬停超时
+      if (this.hoverTimeout) {
+        Object.keys(this.hoverTimeout).forEach(key => {
+          if (this.hoverTimeout[key]) {
+            clearTimeout(this.hoverTimeout[key]);
+            this.hoverTimeout[key] = null;
+          }
+        });
+      }
+      
+      // 清理自定义悬停事件
+      if (this.destroyHover) {
+        try {
+          this.destroyHover();
+        } catch (e) {
+          console.error("悬停事件清理失败", e);
+        }
+        this.destroyHover = null;
+      }
+      
+      // DOM元素彻底清理
+      if (this.element) {
+        try {
+          // 移除所有子元素
+          while (this.element.firstChild) {
+            this.element.removeChild(this.element.firstChild);
+          }
+          
+          // 如果元素还在DOM树中，则移除
+          if (this.element.parentNode) {
+            this.element.remove();
+          }
+        } catch (e) {
+          console.error("DOM元素清理失败", e);
+        }
+      }
+    }
+
+    // 添加取消所有挂起的异步操作的方法
+    cancelPendingOperations(): void {
+      // 取消所有超时操作
+      if (this.hoverTimeout) {
+        Object.keys(this.hoverTimeout).forEach(key => {
+          if (this.hoverTimeout[key]) {
+            clearTimeout(this.hoverTimeout[key]);
+            this.hoverTimeout[key] = null;
+          }
+        });
+      }
+      
+      // 停止活动布局
+      if (this.activeLayout) {
+        try {
+          this.activeLayout.stop();
+        } catch (e) {
+          console.error("停止布局失败", e);
+        }
+      }
     }
 
     removeNodes(nodes: NodeCollection): NodeCollection {

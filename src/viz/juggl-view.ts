@@ -27,4 +27,42 @@ export class JugglView extends ItemView {
      getViewType(): string {
        return JUGGL_VIEW_TYPE;
      }
+
+     async onClose(): Promise<void> {
+       // 防止循环引用和重复清理
+       if (!this.juggl) return Promise.resolve();
+       
+       try {
+         // 保存引用并立即移除
+         const juggl = this.juggl;
+         this.juggl = null;
+         
+         // 执行juggl实例的卸载方法
+         juggl.onunload();
+         
+         // 从组件树中移除
+         this.removeChild(juggl);
+         
+         // 彻底清理DOM元素
+         if (this.containerEl) {
+           try {
+             // 安全移除所有子元素
+             const children = Array.from(this.containerEl.children);
+             children.forEach(child => {
+               try {
+                 child.remove();
+               } catch (e) {
+                 console.error("移除DOM子元素失败", e);
+               }
+             });
+           } catch (e) {
+             console.error("DOM清理失败", e);
+           }
+         }
+       } catch (e) {
+         console.error("视图关闭过程失败", e);
+       }
+       
+       return Promise.resolve();
+     }
 }

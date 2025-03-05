@@ -65,7 +65,7 @@ export class ObsidianStore extends Component implements ICoreDataStore {
               // Add typed edges for the links appearing in the frontmatter
               // TODO: Probably worth including line number etc.
               const link = ref as FrontmatterLinkCache;
-              const split = link.key.split(".")
+              const split = link.key.split(/[\.\uFF0E]/);
               let type;
               if (split.length > 1)
                 type = split.slice(0, -1).join();

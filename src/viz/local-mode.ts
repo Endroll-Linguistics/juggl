@@ -159,15 +159,52 @@ export class LocalMode extends Component implements IAGMode {
     }
 
     onunload(): void {
+      // 清理事件监听器
       for (const listener of this.events) {
-        if (listener.selector) {
-          this.viz.off(listener.eventName, listener.selector, listener.event);
-        } else {
-          this.viz.off(listener.eventName, listener.event);
+        try {
+          if (listener.selector) {
+            this.viz.off(listener.eventName, listener.selector, listener.event);
+          } else {
+            this.viz.off(listener.eventName, listener.event);
+          }
+        } catch (e) {
+          console.error("事件监听器移除失败", e);
         }
       }
       this.events = [];
-      this.toolbar.$destroy();
+      
+      // 清理窗口事件监听器
+      if (this.windowEvent) {
+        try {
+          const doc = window.document;
+          if (doc && doc.removeEventListener) {
+            doc.removeEventListener('keydown', this.windowEvent);
+          }
+          this.windowEvent = null;
+        } catch (e) {
+          console.error("窗口事件监听器移除失败", e);
+        }
+      }
+      
+      // 销毁toolbar组件
+      if (this.toolbar && typeof this.toolbar.$destroy === 'function') {
+        try {
+          this.toolbar.$destroy();
+          this.toolbar = undefined;
+        } catch (e) {
+          console.error("Toolbar组件销毁失败", e);
+        }
+      }
+      
+      // 清理DOM元素
+      try {
+        const element = document.querySelector('.toolbar-container');
+        if (element) {
+          element.innerHTML = '';
+        }
+      } catch (e) {
+        console.error("DOM清理失败", e);
+      }
     }
 
     getName(): string {
