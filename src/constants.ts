@@ -1,3 +1,4 @@
+// This is a test change for Hot-Reload
 import type {Vault} from 'obsidian';
 
 export const CLASS_PINNED = 'pinned';

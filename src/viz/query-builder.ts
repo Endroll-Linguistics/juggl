@@ -1,31 +1,35 @@
 import type {NodeCollection} from 'cytoscape';
-import searchQuery, {ISearchParserDictionary} from 'search-query-parser';
-import cytoscape, {NodeSingular} from 'cytoscape';
+import searchQuery from 'search-query-parser';
+import type {ISearchParserDictionary} from 'search-query-parser';
+import cytoscape from 'cytoscape';
+import type {NodeSingular} from 'cytoscape';
 
 
 const _containsSelector = function(attribute: string, filters: string|string[], op='*='): string[] {
+  // 转义特殊字符并确保Unicode字符支持
+  const escapeString = (str: string) => {
+    return str.replace(/['\\]/g, '\\$&');
+  };
+  
   if (typeof(filters) === 'string' || filters instanceof String) {
-    return [`[${attribute} ${op} '${filters}']`];
+    return [`[${attribute} ${op} '${escapeString(filters as string)}']`];
   }
-  return filters.map((s) => `[${attribute} ${op} '${s}']`);
+  return (filters as string[]).map((s) => `[${attribute} ${op} '${escapeString(s)}']`);
 };
 
 const _tagSelector = function(tag: string|string[]): string[] {
-  if (typeof(tag) === 'string' || tag instanceof String) {
-    if (tag.length > 0 && tag[0] === '#') {
-      const t = tag.slice(1);
-      // @ts-ignore
-      return [`.tag-${tag.slice(1).replaceAll('/', '-')}`];
-    }
-    return [];
-  }
-  return tag.map((t) => {
+  const normalizeTag = (t: string): string => {
     if (t.length > 0 && t[0] === '#') {
-      // @ts-ignore
-      return `.tag-${t.slice(1).replaceAll('/', '-')}`;
+      // 使用encodeURIComponent确保特殊字符和非英文字符被正确处理
+      return `.tag-${encodeURIComponent(t.slice(1)).replace(/%/g, '').replace(/[\/\.]/g, '-')}`;
     }
     return '';
-  });
+  };
+
+  if (typeof(tag) === 'string' || tag instanceof String) {
+    return tag.length > 0 ? [normalizeTag(tag as string)] : [];
+  }
+  return (tag as string[]).map(t => normalizeTag(t)).filter(t => t !== '');
 };
 
 const _classSelector = function(clazz: string|string[]): string[] {

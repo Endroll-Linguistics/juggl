@@ -2,8 +2,10 @@ import {
   MetadataCache,
   Plugin, TFile, Vault, parseYaml, WorkspaceLeaf,
 } from 'obsidian';
+import type {
+  IJugglPluginSettings
+} from './settings';
 import {
-  IJugglPluginSettings,
   JugglGraphSettingsTab,
   DefaultJugglSettings, LAYOUTS,
   genStyleGroups, emptyStyleGroup,
@@ -18,7 +20,8 @@ import type {
   IJuggl, IJugglSettings, IJugglEvents,
 } from 'juggl-api';
 import {OBSIDIAN_STORE_NAME, ObsidianStore} from './obsidian-store';
-import cytoscape, {NodeSingular} from 'cytoscape';
+import cytoscape from 'cytoscape';
+import type {NodeSingular} from 'cytoscape';
 import navigator from 'cytoscape-navigator';
 import popper from 'cytoscape-popper';
 import cola from 'cytoscape-cola';
@@ -35,12 +38,11 @@ import {WorkspaceManager} from './viz/workspaces/workspace-manager';
 import {JUGGL_NODES_VIEW_TYPE, JUGGL_STYLE_VIEW_TYPE, JUGGL_VIEW_TYPE, VizId} from 'juggl-api';
 import type {FSWatcher} from 'fs';
 import {GlobalWarningModal} from './ui/settings/global-graph-modal';
-
+import {Logger, LogLevel, safeExecute} from './logger';
 
 // I got this from https://github.com/SilentVoid13/Templater/blob/master/src/fuzzy_suggester.ts
 
 // const STATUS_OFFLINE = 'Neo4j stream offline';
-
 
 export default class JugglPlugin extends Plugin implements IJugglPlugin {
     // Match around [[ and ]], and ensure content isn't a wikilnk closure

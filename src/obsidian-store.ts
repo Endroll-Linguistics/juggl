@@ -17,6 +17,7 @@ import type {
 } from 'cytoscape';
 import {CLASS_EXPANDED} from './constants';
 import {nodeDangling, nodeFromFile, parseRefCache, VizId} from 'juggl-api';
+import {Logger} from './logger';
 
 export const OBSIDIAN_STORE_NAME = 'Obsidian';
 
@@ -309,16 +310,95 @@ ${edge.data.context}`;
           }));
       this.registerEvent(
           this.vault.on('rename', (file, oldPath) => {
+            const logger = Logger.getInstance();
+            logger.debug(`文件重命名: ${oldPath} -> ${file.path}`);
+            
             if (file instanceof TFile) {
               const id = VizId.fromFile(file);
               const oldId = VizId.fromPath(oldPath);
+              
               store.plugin.activeGraphs().forEach(async (v) => {
-                setTimeout(async ()=> {
-                  // Changing the ID of a node in Cytoscape is not allowed, so remove and then restore.
-                  // Put in setTimeout because Obsidian doesn't immediately update the metadata on rename...
-                  v.viz.$id(oldId.toId()).remove();
-                  await store.refreshNode(id, v);
-                }, 500);
+                try {
+                  // 查找与旧路径匹配的节点
+                  const oldNodes = v.viz.$id(oldId.toId());
+                  
+                  if (oldNodes.length > 0) {
+                    logger.debug(`找到要更新的节点: ${oldId.toId()}`);
+                    
+                    // 保存节点状态
+                    const isActiveNode = oldNodes.hasClass('active-node');
+                    const isPinned = oldNodes.hasClass('pinned');
+                    const isExpanded = oldNodes.hasClass('expanded');
+                    const classes = oldNodes.classes();
+                    
+                    // 记录相连的节点
+                    const connectedEdges = oldNodes.connectedEdges();
+                    const connections = connectedEdges.map(edge => {
+                      return {
+                        source: edge.source().id(),
+                        target: edge.target().id(),
+                        data: edge.data()
+                      };
+                    });
+                    
+                    // 删除旧节点
+                    oldNodes.remove();
+                    
+                    // 添加新节点并恢复状态
+                    setTimeout(async () => {
+                      try {
+                        await store.refreshNode(id, v);
+                        
+                        // 获取新节点并恢复状态
+                        const newNode = v.viz.$id(id.toId());
+                        if (newNode.length > 0) {
+                          // 恢复类和状态
+                          if (isActiveNode) {
+                            newNode.addClass('active-node');
+                            if (v.mode && typeof v.mode.updateActiveNode === 'function') {
+                              v.mode.updateActiveNode(newNode, false);
+                            }
+                          }
+                          
+                          if (isPinned) newNode.addClass('pinned');
+                          if (isExpanded) newNode.addClass('expanded');
+                          
+                          // 更新连接的节点关系
+                          for (const connection of connections) {
+                            if (connection.source === oldId.toId()) {
+                              // 如果源是旧节点，创建从新节点到目标的边
+                              v.viz.add({
+                                group: 'edges',
+                                data: {
+                                  ...connection.data,
+                                  source: id.toId(),
+                                  target: connection.target
+                                }
+                              });
+                            } else if (connection.target === oldId.toId()) {
+                              // 如果目标是旧节点，创建从源到新节点的边
+                              v.viz.add({
+                                group: 'edges',
+                                data: {
+                                  ...connection.data,
+                                  source: connection.source,
+                                  target: id.toId()
+                                }
+                              });
+                            }
+                          }
+                          
+                          // 更新视图
+                          v.viz.style().update();
+                        }
+                      } catch (error) {
+                        logger.error(`更新重命名的节点时出错: ${error}`);
+                      }
+                    }, 500); // 给Obsidian一些时间来更新元数据
+                  }
+                } catch (error) {
+                  logger.error(`处理文件重命名时出错: ${error}`);
+                }
               });
             }
           }));

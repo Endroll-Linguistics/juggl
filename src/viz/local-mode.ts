@@ -10,12 +10,15 @@ import {
   CLASS_ACTIVE_NODE,
   CLASS_CONNECTED_ACTIVE_NODE,
   CLASS_INACTIVE_NODE,
+  CLASS_EXPANDED,
 } from '../constants';
 import type {Core} from 'cytoscape';
 import type {SvelteComponent} from 'svelte';
 import {
   getLayoutSetting,
 } from './layout-settings';
+import {Logger} from '../logger';
+import {GraphStyleSheet} from './stylesheet';
 
 
 class EventRec {
@@ -70,23 +73,75 @@ export class LocalMode extends Component implements IAGMode {
       if (!this.view.settings.autoAddNodes) {
         return;
       }
+      
       const id = new VizId(file.name, 'core');
-      let node: NodeSingular;
+      let node;
+      
+      // 开始批处理以提高性能
       this.viz.startBatch();
+      
+      // 检查节点是否已存在
       if (this.viz.$id(id.toId()).length === 0) {
-        const nodeDef = await this.view.datastores.coreStore.get(id, this.view);
-        node = this.viz.add(nodeDef);
+        // 节点不存在，创建新节点
+        const store = this.view.datastores.coreStore;
+        node = await store.get(id, this.view);
+        if (node) {
+          this.viz.add(node);
+        }
       } else {
+        // 节点已存在
         node = this.viz.$id(id.toId());
       }
-      await this.view.expand(node, false);
-      node.addClass(CLASS_ACTIVE_NODE);
-      this.viz.nodes()
-          .difference(node.closedNeighborhood())
-          .remove();
-      this.view.onGraphChanged(false);
-      this.updateActiveFile(node as NodeSingular);
+      
+      // 更新活动节点
+      if (node) {
+        // 移除之前的活动节点标记
+        this.viz.$(`.${CLASS_ACTIVE_NODE}`).removeClass(CLASS_ACTIVE_NODE);
+        
+        // 标记新的活动节点
+        node.addClass(CLASS_ACTIVE_NODE);
+        
+        // 重新应用本地样式
+        this.reapplyLocalStyles(node);
+        
+        // 如果设置了自动展开，则展开节点
+        if (this.view.settings.autoExpand) {
+          await this.view.expand(node);
+        }
+      }
+      
+      // 结束批处理并更新视图
       this.viz.endBatch();
+      this.viz.style().update();
+    }
+
+    // 添加重新应用本地样式的方法
+    private reapplyLocalStyles(node: NodeSingular) {
+      try {
+        const logger = Logger.getInstance();
+        logger.debug(`重新应用本地样式到节点: ${node.id()}`);
+        
+        // 获取样式表
+        const styleSheet = new GraphStyleSheet(this.view.plugin);
+        
+        // 更新样式
+        this.view.viz.style(styleSheet.getDefaultStylesheet());
+        
+        // 应用样式组
+        const styleGroups = this.view.settings.localStyleGroups || 
+                            this.view.settings.globalStyleGroups;
+        
+        if (styleGroups && styleGroups.length > 0) {
+          // 应用样式组
+          const styleGroupSheet = styleSheet.styleGroupsToSheet(styleGroups, 'local');
+          this.view.viz.style().fromString(styleGroupSheet).update();
+        }
+        
+        // 更新视图
+        this.view.viz.style().update();
+      } catch (error) {
+        Logger.getInstance().error(`应用本地样式时出错: ${error}`);
+      }
     }
 
     changeDepth(depth: number) {
